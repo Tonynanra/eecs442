@@ -1,12 +1,33 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-	
+
+def normal_init(m, mean, std):
+  """
+  Helper function. Initialize model parameter with given mean and std.
+  """
+  if isinstance(m, nn.ConvTranspose2d) or isinstance(m, nn.Conv2d):
+    # delete start
+    m.weight.data.normal_(mean, std)
+    m.bias.data.zero_()
+    # delete end
+    
+class DownBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, **kwargs):
+        super().__init__()
+        self.layers = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, padding_mode="reflect", **kwargs),
+            nn.BatchNorm2d(out_channels),
+            nn.LeakyReLU(inplace=True)
+        )
+    def forward(self, x):
+        return self.layers(x)
+
 class generator(nn.Module):
   # initializers
 	def __init__(self, scale : int=1):
 		super(generator, self).__init__()
-
+		
 		# Unet generator encoder
 		self.conv1 = nn.Conv2d(3, 64, kernel_size=4, stride=2, padding=1)
 		self.conv2 = nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1)

@@ -10,10 +10,10 @@ class PixelSceneryDataset(Dataset):
     '''
     Adopted from https://github.com/Hexanol777/PixelGAN/blob/main/dataset.py
     '''
-    def __init__(self, root_pixel, root_scenery, transform=transforms):
+    def __init__(self, root_pixel, root_scenery):
         self.root_pixel = root_pixel
         self.root_scenery = root_scenery
-        self.transform = transform
+
 
         self.pixel_images = os.listdir(root_pixel)
         self.scenery_images = os.listdir(root_scenery)
@@ -32,7 +32,7 @@ class PixelSceneryDataset(Dataset):
             A.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5], max_pixel_value=255),
             ToTensorV2(),
             ])
-        return transforms(image)
+        return transforms(image=image)
 
     def __getitem__(self, index):
         pixel_img = self.pixel_images[index % self.pixel_len]
@@ -44,11 +44,10 @@ class PixelSceneryDataset(Dataset):
         pixel_img = np.array(Image.open(pixel_path).convert("RGB"))
         scenery_img = np.array(Image.open(scenery_path).convert("RGB"))
 
-        if self.transform:
-            pixel_img = self.transforms(pixel_img)
-            scenery_img = self.transforms(scenery_img)
+        pixel_img = self.transforms(pixel_img)
+        scenery_img = self.transforms(scenery_img)
 
-        return pixel_img, scenery_img
+        return pixel_img['image'], scenery_img['image']
 
 
 
