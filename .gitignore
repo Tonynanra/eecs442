@@ -8,6 +8,7 @@
 # Whitelist the file you're interested in. 
 !*.py
 !*.ipynb
+!*.pkl
 !*.gitignore
 
 ### Python ###
