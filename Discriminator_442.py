@@ -15,8 +15,8 @@ class discriminator(nn.Module):
     self.bn2 = nn.BatchNorm2d(self.getDim(out_dim, 2))
     self.conv3 = nn.Conv2d(self.getDim(out_dim, 2), self.getDim(out_dim, 3), kernel_size=4, stride=2, padding=1)
     self.bn3 = nn.BatchNorm2d(self.getDim(out_dim, 3))
-    self.conv3 = nn.Conv2d(self.getDim(out_dim, 3), self.getDim(out_dim, 4), kernel_size=4, stride=2, padding=1)
-    self.bn3 = nn.BatchNorm2d(self.getDim(out_dim, 4))
+    self.conv4 = nn.Conv2d(self.getDim(out_dim, 3), self.getDim(out_dim, 4), kernel_size=4, stride=2, padding=1)
+    self.bn4 = nn.BatchNorm2d(self.getDim(out_dim, 4))
     self.conv5 = nn.Conv2d(self.getDim(out_dim, 4), 1, kernel_size=4, stride=1, padding=1)
 
   # weight_init
