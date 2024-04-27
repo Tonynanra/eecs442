@@ -15,7 +15,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-
+#pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
 def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimizer, D_optimizer, G_scaler, D_scaler, numEpochs=100, resume_from=None):
 	'''
@@ -196,7 +196,7 @@ if __name__ == '__main__':
 			train_dataset,
 			batch_size=BATCH_SIZE,
 			shuffle=True,
-			num_workers=mp.cpu_count(),
+			num_workers=0,
 			pin_memory=True,
 	)
 
