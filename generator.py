@@ -1,27 +1,42 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 def normal_init(m, mean, std):
-  """
-  Helper function. Initialize model parameter with given mean and std.
-  """
-  if isinstance(m, nn.ConvTranspose2d) or isinstance(m, nn.Conv2d):
-    # delete start
-    m.weight.data.normal_(mean, std)
-    m.bias.data.zero_()
-    # delete end
-    
-class DownBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, **kwargs):
-        super().__init__()
-        self.layers = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, padding_mode="reflect", **kwargs),
-            nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(inplace=True)
-        )
-    def forward(self, x):
-        return self.layers(x)
+	"""
+	Helper function. Initialize model parameter with given mean and std.
+	"""
+	if isinstance(m, nn.ConvTranspose2d) or isinstance(m, nn.Conv2d):
+		# delete start
+		m.weight.data.normal_(mean, std)
+		m.bias.data.zero_()
+		# delete end
+	
+class ConvDown(nn.Module):
+	def __init__(self, in_channels, out_channels, **kwargs):
+		super().__init__()
+		self.layers = nn.Sequential(
+			nn.Conv2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1),
+			nn.BatchNorm2d(out_channels),
+			nn.LeakyReLU(inplace=True)
+		)
+	def forward(self, x):
+		return self.layers(x)
+
+class gen(nn.Module):
+	def init(self, scale : int=1):
+		super().__init__()
+		stages = 2 ** np.arange(6, 9+scale-1)
+		self.initial = ConvDown(3, 64)
+		self.downs = nn.ModuleList([ConvDown(in_channels, out_channels) for in_channels, out_channels in zip(stages, stages[1:])])
+		self.bottleneck = nn.ModuleList([ConvDown(stages[-1], stages[-1]) for _ in range(4)])
+		self.ups = nn.ModuleList([nn.Sequential(
+			nn.ConvTranspose2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1),
+			nn.BatchNorm2d(out_channels),
+			nn.ReLU(inplace=True)
+		) for in_channels, out_channels in zip(stages[::-1], stages[-2::-1]
+		)])
 
 class generator(nn.Module):
   # initializers
