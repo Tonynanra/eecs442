@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 
 
 
-def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimizer, D_optimizer, G_scaler, D_scaler, numEpochs=20, resume_from=None):
+def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimizer, D_optimizer, G_scaler, D_scaler, numEpochs=100, resume_from=None):
 	'''
 	Using LSGAN loss for both discriminators and generators, 
 	and L1 loss for cycle and identity loss.
