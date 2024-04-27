@@ -15,9 +15,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-LAMBDA_CYCLE = 10
-LAMBDA_IDENTITY = 0
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimizer, D_optimizer, G_scaler, D_scaler, numEpochs=20, resume_from=None):
 	'''
@@ -30,7 +28,6 @@ def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimiz
 
 	H_reals = 0
 	H_fakes = 0
-	train_loop = tqdm(train_loader)
 	writer = SummaryWriter()
 	start_epoch = 0
 	checkpoint_interval = numEpochs // 4
@@ -57,6 +54,7 @@ def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimiz
 		G_pix.train()
 		D_live.train()
 		D_pix.train()
+		train_loop = tqdm(train_loader)
 		for idx, (pixel, scenery) in enumerate(train_loop):
 			pixel = pixel.to(device)
 			scenery = scenery.to(device)
@@ -122,7 +120,7 @@ def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimiz
 			G_scaler.step(G_optimizer)
 			G_scaler.update()
 
-			if idx % 200 == 0:
+			if idx % (len(train_dataset) / BATCH_SIZE // 4) == 0:
 				save_folder = f"saved_images/{epoch}"
 				os.makedirs(save_folder, exist_ok=True)
 				save_image(fake_scenery * 0.5 + 0.5, os.path.join(save_folder, f"scenery_{idx}.png"))
@@ -140,7 +138,9 @@ def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimiz
 				writer.flush()
 			train_loop.set_postfix(H_real=H_reals / (idx + 1), H_fake=H_fakes / (idx + 1))
 		#end TRAINING LOOP
-
+		
+		save_image(fake_scenery * 0.5 + 0.5, os.path.join(save_folder, f"scenery_final.png"))
+		save_image(fake_pixel * 0.5 + 0.5, os.path.join(save_folder, f"pixel_final.png"))
 		if epoch % checkpoint_interval == 0:
 			torch.save({
 					'epoch': epoch,
@@ -166,8 +166,12 @@ def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimiz
 		'D_scaler_state_dict': D_scaler.state_dict(),
 	}, f'train_result.pth')
 				
-def main():
+if __name__ == '__main__':
 	#data paths
+	LAMBDA_CYCLE = 10
+	LAMBDA_IDENTITY = 0
+	BATCH_SIZE = 16
+	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 	Train_Dir_live="imagenet/"
 	Train_Dir_pix="pixel/"
 
@@ -190,7 +194,7 @@ def main():
 	#setting up dataloader
 	train_loader = DataLoader(
 			train_dataset,
-			batch_size=16,
+			batch_size=BATCH_SIZE,
 			shuffle=True,
 			num_workers=mp.cpu_count(),
 			pin_memory=True,
@@ -221,5 +225,3 @@ def main():
 	print("begin training")
 	train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimizer, D_optimizer, G_scaler, D_scaler)
 
-if __name__ == '__main__':
-	main()
