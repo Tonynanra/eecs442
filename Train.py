@@ -5,7 +5,7 @@ import torch.optim as optim
 from torchvision.utils import save_image
 from tqdm import tqdm
 from Discriminator_442 import discriminator
-from generator import generator
+from generator import generator, gen_with_attn
 from dataset import PixelSceneryDataset
 import multiprocessing as mp
 import pickle
@@ -173,7 +173,7 @@ if __name__ == '__main__':
 	LAMBDA_IDENTITY = 0.5
 	BATCH_SIZE = 1
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-	Train_Dir_live="imagenet/"
+	Train_Dir_live="scenery/"
 	Train_Dir_pix="pixel/"
 
 	#setting up dataset
@@ -210,16 +210,16 @@ if __name__ == '__main__':
 	# 		pin_memory=True,
 	# )
 	
-	Val_loader = None
+	val_loader = None
 
 	#setting up scalers to prevent minor changes from defaulting to 0
 	G_scaler = torch.cuda.amp.GradScaler()
 	D_scaler = torch.cuda.amp.GradScaler()
 
 	#setting up discriminators and generators
-	G_live = generator().to(device)
+	G_live = gen_with_attn().to(device)
 	D_live = discriminator().to(device)
-	G_pix = generator().to(device)
+	G_pix = gen_with_attn().to(device)
 	D_pix = discriminator().to(device)
 	
 	#setting up optimizers
