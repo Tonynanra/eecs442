@@ -2,6 +2,27 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import attention_block
+
+#Hyperparameters to tune for attention layer:
+
+#try 16, 32, 64. if fast enough training time & enough gpu memory, 64 is the best
+embed_dim = 64 
+
+max_len = None # = spatial_dimention squared
+
+# option 1: 'cross_attn'
+# option 2: 'self_attn'
+# option 3: 'mamba'
+layer_type = 'cross_attn'
+
+in_channels = None #output channels of conv layer
+
+# option 1: 'learnedPE' 
+# option 2: 'NoPE' - no positional encoding
+# option 3: 'RoPE' - rotary positional encoding, sota of nlp tasks (e.g. chatgpt)
+# only matters to self and cross attn
+pe_type = 'learnedPE'
 
 def normal_init(m, mean, std):
 	"""
@@ -57,7 +78,8 @@ class residualAttn(nn.Module):
 	def __init__(self, n_channels, spatial_dim):
 		super().__init__()
 		self.residual = residualBlock(n_channels)
-		self.attention = attention(n_channels, spatial_dim)
+		self.attention = attention_block.BaseNet(embed_dim, spatial_dim ** 2, layer_type, 
+										         n_channels, pe_type)
 
 	def forward(self, x, orig_img):
 		x = self.residual(x)
@@ -78,8 +100,8 @@ class gen_with_attn(nn.Module):
 			mult = 2 ** i
 			self.downs.append(ConvDown(64 * mult, 64 * mult * 2))
 
-		resAttn = nn.ModuleList(residualAttn(64 * mult * 2, img_dim / (2**down_sample)) for _ in range(n_blocks))
-		self.resAttn = nn.Sequential(*resAttn)
+		self.resAttns = nn.ModuleList(residualAttn(64 * mult * 2, img_dim / (2**down_sample)) for _ in range(n_blocks))
+		
 
 		self.ups = nn.ModuleList()
 		for i in range(down_sample):  # add upsampling layers
@@ -94,8 +116,9 @@ class gen_with_attn(nn.Module):
 		for down in self.downs:
 			x = down(x)
 			skips.append(x.clone())
-
-		x = self.resAttn(x, orig_img)
+		
+		for resAttn in self.resAttns:
+			x = resAttn(x, orig_img)
 
 		for up, skip in zip(self.ups, skips[::-1]):
 			x = up(x, skip)
