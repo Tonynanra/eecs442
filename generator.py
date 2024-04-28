@@ -15,7 +15,7 @@ def normal_init(m, mean, std):
 	
 class ConvDown(nn.Module):
 	def __init__(self, in_channels, out_channels, **kwargs):
-		super().__init__()
+		super().__init__(**kwargs)
 		self.layers = nn.Sequential(
 			nn.Conv2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1),
 			nn.BatchNorm2d(out_channels),
@@ -24,24 +24,59 @@ class ConvDown(nn.Module):
 	def forward(self, x):
 		return self.layers(x)
 
-class gen(nn.Module):
-	def init(self, scale : int=1):
-		super().__init__()
-		stages = 2 ** np.arange(6, 9+scale-1)
-		self.initial = ConvDown(3, 64)
-		self.downs = nn.ModuleList([ConvDown(in_channels, out_channels) for in_channels, out_channels in zip(stages, stages[1:])])
-		self.bottleneck = nn.ModuleList([ConvDown(stages[-1], stages[-1]) for _ in range(4)])
-		self.ups = nn.ModuleList([nn.Sequential(
-			nn.ConvTranspose2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1),
+class ConvUp(nn.Module):
+	def __init__(self, in_channels, out_channels, **kwargs):
+		super().__init__(**kwargs)
+		self.layers = nn.Sequential(
+			nn.ConvTranspose2d(in_channels*2, out_channels, kernel_size=4, stride=2, padding=1),
 			nn.BatchNorm2d(out_channels),
+			nn.LeakyReLU(inplace=True)
+		)
+	def forward(self, x, skip):
+		x = torch.cat([x, skip], dim=1)
+		return self.layers(x)
+
+class gen_with_attn(nn.Module):
+	def __init__(self, scale : int=1, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		stages = 2 ** np.arange(6, 9+scale)
+		self.initial = ConvDown(3, stages[0])
+		self.downs = nn.ModuleList([ConvDown(in_channels, out_channels) for in_channels, out_channels in zip(stages, stages[1:])])
+		self.bottleneck = nn.ModuleList(ConvDown(stages[-1], stages[-1]) for _ in range(4))
+		
+		self.deconv1 = nn.Sequential(
+			nn.ConvTranspose2d(stages[-1], stages[-1], kernel_size=4, stride=2, padding=1),
+			nn.BatchNorm2d(stages[-1]),
 			nn.ReLU(inplace=True)
-		) for in_channels, out_channels in zip(stages[::-1], stages[-2::-1]
-		)])
+		)
+		self.ups = nn.ModuleList(
+			[ConvUp(stages[-1], stages[-1]) for _ in range(3)] +
+			[ConvUp(in_channels, out_channels) for in_channels, out_channels in zip(stages[::-1], stages[-2::-1])]
+		)
+		self.final = nn.ConvTranspose2d(stages[0] * 2, 3, kernel_size=4, stride=2, padding=1)
+
+	def forward(self, x):
+		skips = []
+		x = self.initial(x)
+		skips.append(x)
+		for down in self.downs:
+			x = down(x)
+			skips.append(x)
+		for bottleneck in self.bottleneck[:-1]:
+			x = bottleneck(x)
+			skips.append(x)
+		x = self.bottleneck[-1](x)
+		x = self.deconv1(x)
+		for up, skip in zip(self.ups, reversed(skips)):
+			x = up(x, skip)
+		x = torch.cat([x, skips[0]], dim=1)
+		return self.final(x)
+		
 
 class generator(nn.Module):
   # initializers
 	def __init__(self, scale : int=1):
-		super(generator, self).__init__()
+		super().__init__()
 		
 		# Unet generator encoder
 		self.conv1 = nn.Conv2d(3, 64, kernel_size=4, stride=2, padding=1)
