@@ -189,8 +189,10 @@ if __name__ == '__main__':
 	with open('val_subset.pkl', 'rb') as f:
 			val_indices = pickle.load(f)
 
-	train_dataset = Subset(dataset, train_indices)
-	val_dataset = Subset(dataset, val_indices)
+	# train_dataset = Subset(dataset, train_indices)
+	# val_dataset = Subset(dataset, val_indices)
+
+	train_dataset = dataset
 
 	#setting up dataloader
 	train_loader = DataLoader(
@@ -201,13 +203,15 @@ if __name__ == '__main__':
 			pin_memory=True,
 	)
 
-	val_loader = DataLoader(
-			val_dataset,
-			batch_size=1,
-			shuffle=False,
-			pin_memory=True,
-	)
+	# val_loader = DataLoader(
+	# 		val_dataset,
+	# 		batch_size=1,
+	# 		shuffle=False,
+	# 		pin_memory=True,
+	# )
 	
+	Val_loader = None
+
 	#setting up scalers to prevent minor changes from defaulting to 0
 	G_scaler = torch.cuda.amp.GradScaler()
 	D_scaler = torch.cuda.amp.GradScaler()
