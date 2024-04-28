@@ -1,5 +1,5 @@
-
 albumentations
 matplotlib
 tqdm
 tensorboard
+rotary-embedding-torch
