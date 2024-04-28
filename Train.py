@@ -56,8 +56,8 @@ def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimiz
 		D_pix.train()
 		train_loop = tqdm(train_loader)
 		for idx, (pixel, scenery) in enumerate(train_loop):
-			pixel = pixel.to(device)
-			scenery = scenery.to(device)
+			pixel = pixel.to(device, non_blocking=True)
+			scenery = scenery.to(device, non_blocking=True)
 
 			# Train Discriminators S and P
 			with torch.cuda.amp.autocast():
@@ -104,11 +104,11 @@ def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimiz
 				identity_scenery = G_live(scenery)
 				identity_pixel_loss = L1_loss(pixel, identity_pixel)
 				identity_scenery_loss = L1_loss(scenery, identity_scenery)
-
+	
 				# add all togethor
 				G_loss = (
-						loss_G_pix
-						+ loss_G_live
+						loss_G_pix * LAMBDA_GEN
+						+ loss_G_live * LAMBDA_GEN
 						+ cycle_pixel_loss * LAMBDA_CYCLE
 						+ cycle_scenery_loss * LAMBDA_CYCLE
 						+ identity_scenery_loss * LAMBDA_IDENTITY
@@ -133,8 +133,8 @@ def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimiz
 				writer.add_scalar("G_pix_loss", loss_G_pix.item(), epoch * len(train_loader) + idx)
 				writer.add_scalar("cycle_pixel_loss", cycle_pixel_loss.item(), epoch * len(train_loader) + idx)
 				writer.add_scalar("cycle_scenery_loss", cycle_scenery_loss.item(), epoch * len(train_loader) + idx)
-				writer.add_scalar("identity_pixel_loss", identity_pixel_loss.item(), epoch * len(train_loader) + idx)
-				writer.add_scalar("identity_scenery_loss", identity_scenery_loss.item(), epoch * len(train_loader) + idx)
+				# writer.add_scalar("identity_pixel_loss", identity_pixel_loss.item(), epoch * len(train_loader) + idx)
+				# writer.add_scalar("identity_scenery_loss", identity_scenery_loss.item(), epoch * len(train_loader) + idx)
 				writer.flush()
 			train_loop.set_postfix(H_real=H_reals / (idx + 1), H_fake=H_fakes / (idx + 1))
 		#end TRAINING LOOP
@@ -169,8 +169,9 @@ def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimiz
 if __name__ == '__main__':
 	#data paths
 	LAMBDA_CYCLE = 10
-	LAMBDA_IDENTITY = 0
-	BATCH_SIZE = 16
+	LAMBDA_GEN = 1
+	LAMBDA_IDENTITY = 0.5
+	BATCH_SIZE = 1
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 	Train_Dir_live="imagenet/"
 	Train_Dir_pix="pixel/"
