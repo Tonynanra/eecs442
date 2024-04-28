@@ -39,7 +39,7 @@ class ConvUp(nn.Module):
 		return self.layers(x)
 
 class residualBlock(nn.Module):
-	def __init__(self, n_channels, spatial_dim):
+	def __init__(self, n_channels):
 		super().__init__()
 		self.layers = nn.Sequential(
 			nn.Conv2d(n_channels, n_channels, kernel_size=3, padding=1),
@@ -52,6 +52,17 @@ class residualBlock(nn.Module):
 	
 	def forward(self, x):
 		return self.final(x + self.layers(x))
+
+class residualAttn(nn.Module):
+	def __init__(self, n_channels, spatial_dim):
+		super().__init__()
+		self.residual = residualBlock(n_channels)
+		self.attention = attention(n_channels, spatial_dim)
+
+	def forward(self, x, orig_img):
+		x = self.residual(x)
+		x = self.attention(x, orig_img)
+		return x
 
 class gen_with_attn(nn.Module):
 	def __init__(self, scale : int=1, img_dim : int=256, down_sample=2, n_blocks = 6, *args, **kwargs):
@@ -67,8 +78,8 @@ class gen_with_attn(nn.Module):
 			mult = 2 ** i
 			self.downs.append(ConvDown(64 * mult, 64 * mult * 2))
 
-		res = nn.ModuleList(residualBlock(64 * mult * 2, img_dim / (2**down_sample)) for _ in range(n_blocks))
-		self.residual = nn.Sequential(*res)
+		resAttn = nn.ModuleList(residualAttn(64 * mult * 2, img_dim / (2**down_sample)) for _ in range(n_blocks))
+		self.resAttn = nn.Sequential(*resAttn)
 
 		self.ups = nn.ModuleList()
 		for i in range(down_sample):  # add upsampling layers
@@ -77,11 +88,15 @@ class gen_with_attn(nn.Module):
 		self.final = nn.ConvTranspose2d(64 * 2, 3, kernel_size=4, stride=2, padding=1)
 
 	def forward(self, x):
+		orig_img = x.clone()
 		skips = []
+
 		for down in self.downs:
 			x = down(x)
 			skips.append(x.clone())
-		x = self.residual(x)
+
+		x = self.resAttn(x, orig_img)
+
 		for up, skip in zip(self.ups, skips[::-1]):
 			x = up(x, skip)
 		x = torch.cat([x, skips[0]], dim=1)
