@@ -12,7 +12,9 @@ def normal_init(m, mean, std):
 		m.weight.data.normal_(mean, std)
 		m.bias.data.zero_()
 		# delete end
-	
+
+
+
 class ConvDown(nn.Module):
 	def __init__(self, in_channels, out_channels, **kwargs):
 		super().__init__(**kwargs)
@@ -36,6 +38,20 @@ class ConvUp(nn.Module):
 		x = torch.cat([x, skip], dim=1)
 		return self.layers(x)
 
+class residualBlock(nn.Module):
+	def __init__(self, n_channels, spatial_dim):
+		super().__init__()
+		self.layers = nn.Sequential(
+			nn.Conv2d(n_channels, n_channels, kernel_size=3, padding=1),
+			nn.BatchNorm2d(n_channels),
+			nn.ReLU(True),
+			nn.Conv2d(n_channels, n_channels, 3, 1),
+			nn.BatchNorm2d(n_channels)
+		)
+	
+	def forward(self, x):
+		return F.relu(x + self.layers(x), True)
+
 class gen_with_attn(nn.Module):
 	def __init__(self, scale : int=1, img_dim : int=256, down_sample=2, n_blocks = 6, *args, **kwargs):
 		super().__init__(*args, **kwargs)
@@ -50,7 +66,8 @@ class gen_with_attn(nn.Module):
 			mult = 2 ** i
 			self.downs += ConvDown(64 * mult, 64 * mult * 2)
 
-		self.residual = nn.ModuleList(residualBlock() for _ in range(n_blocks))
+		res = nn.ModuleList(residualBlock(64 * mult * 2, 32) for _ in range(n_blocks))
+		self.residual = nn.Sequential(*res)
 
 		self.ups = nn.ModuleList()
 		for i in range(down_sample):  # add upsampling layers
@@ -61,9 +78,14 @@ class gen_with_attn(nn.Module):
 	def forward(self, x):
 		skips = [x.clone()]
 		x = self.initial(x)
-		for layer in self.downs:
+		for down in self.downs:
 			skips += x.clone()
-			x = 
+			x = down(x)
+		x = self.residual(x)
+		for up, skip in zip(self.ups, skips[::-1]):
+			x = self.up(x, skip)
+		return self.final(x)
+		
 
 		
 
