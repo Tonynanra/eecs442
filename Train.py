@@ -164,7 +164,7 @@ if __name__ == '__main__':
 	BATCH_SIZE = 1
 	NUM_EPOCHS = 100
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-	Train_Dir_live="scenery2/"
+	Train_Dir_live="scenery/"
 	Train_Dir_pix="pixel/"
 	ckpt_path = "checkpoints/checkpoint_75.pth"
 	if ckpt_path is None:
@@ -225,10 +225,6 @@ if __name__ == '__main__':
 		start_epoch = 0
 	else:
 		attn_config, start_epoch, G_live, G_pix, D_live, D_pix, G_optimizer, D_optimizer, G_scaler, D_scaler = get_checkpoint(ckpt_path,device)
-		# G_live = G_live.to(device)
-		# G_pix = G_pix.to(device)
-		# D_live = D_live.to(device)
-		# D_pix = D_pix.to(device)
 
 	os.makedirs('checkpoints', exist_ok=True)
 	with open('checkpoints/opt.txt', 'w', encoding='utf-8') as f:
