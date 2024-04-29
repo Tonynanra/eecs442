@@ -143,6 +143,7 @@ class gen_with_attn(nn.Module):
 			padding=3,
 			padding_mode="reflect",
 		)
+		self.apply(lambda m: normal_init(m, 0.0, 0.02))
 	
 	def forward(self, x):
 		orig_img = x.clone()
