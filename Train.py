@@ -44,8 +44,8 @@ def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimiz
 		D_pix.train()
 		train_loop = tqdm(train_loader)
 		for idx, (pixel, scenery) in enumerate(train_loop):
-			pixel = pixel.to(device, non_blocking=True)
-			scenery = scenery.to(device, non_blocking=True)
+			pixel = pixel.to(device)
+			scenery = scenery.to(device)
 
 			# Train Discriminators S and P
 			with torch.cuda.amp.autocast():
@@ -166,7 +166,7 @@ if __name__ == '__main__':
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 	Train_Dir_live="scenery/"
 	Train_Dir_pix="pixel/"
-	ckpt_path = None
+	ckpt_path = 'checkpoints/checkpoint_0.pth'
 	if ckpt_path is None:
 		attn_config = attnConfig(attn_type='cross_attn')
 	
@@ -224,7 +224,11 @@ if __name__ == '__main__':
 		D_optimizer = optim.Adam(list(D_live.parameters()) + list(D_pix.parameters()), lr=0.0002, betas=[0.5,0.999])
 		start_epoch = 0
 	else:
-		attn_config, start_epoch, G_live, G_pix, D_live, D_pix, G_optimizer, D_optimizer, G_scaler, D_scaler = get_checkpoint(ckpt_path)
+		attn_config, start_epoch, G_live, G_pix, D_live, D_pix, G_optimizer, D_optimizer, G_scaler, D_scaler = get_checkpoint(ckpt_path, device)
+		G_live = G_live.to(device)
+		G_pix = G_pix.to(device)
+		D_live = D_live.to(device)
+		D_pix = D_pix.to(device)
 
 	os.makedirs('checkpoints', exist_ok=True)
 	with open('checkpoints/opt.txt', 'w', encoding='utf-8') as f:
