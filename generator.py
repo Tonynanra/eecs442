@@ -78,36 +78,37 @@ class residualAttn(nn.Module):
 	def __init__(self, n_channels, spatial_dim):
 		super().__init__()
 		self.residual = residualBlock(n_channels)
-		self.attention = attention_block.BaseNet(embed_dim, spatial_dim ** 2, layer_type, 
-										         n_channels, pe_type)
+		# self.attention = attention_block.BaseNet(embed_dim, spatial_dim ** 2, layer_type, 
+		# 								         n_channels, pe_type)
 
 	def forward(self, x, orig_img):
 		x = self.residual(x)
-		x = self.attention(x, orig_img)
+		# x = self.attention(x, orig_img)
 		return x
 
 class gen_with_attn(nn.Module):
 	def __init__(self, scale : int=1, img_dim : int=256, down_sample=2, n_blocks = 6, *args, **kwargs):
 		super().__init__(*args, **kwargs)
+		scale = 2 ** (5 + scale)
 		initial = nn.Sequential(
-				 nn.Conv2d(3, 64, kernel_size=4, stride=2, padding=1),
-				 nn.BatchNorm2d(64),
+				 nn.Conv2d(3, scale, kernel_size=4, stride=2, padding=1),
+				 nn.BatchNorm2d(scale),
 				 nn.LeakyReLU(True)
 		)
 		self.downs = nn.ModuleList([initial])
 		down_sample -= 1
 		for i in range(down_sample):  # add downsampling layers
 			mult = 2 ** i
-			self.downs.append(ConvDown(64 * mult, 64 * mult * 2))
+			self.downs.append(ConvDown(scale * mult, scale * mult * 2))
 
-		self.resAttns = nn.ModuleList(residualAttn(64 * mult * 2, img_dim / (2**down_sample)) for _ in range(n_blocks))
+		self.resAttns = nn.ModuleList(residualAttn(scale * mult * 2, img_dim / (2**down_sample)) for _ in range(n_blocks))
 		
 
 		self.ups = nn.ModuleList()
 		for i in range(down_sample):  # add upsampling layers
 			mult = 2 ** (down_sample - i)
-			self.ups.append(ConvUp(64 * mult, int(64 * mult / 2)))
-		self.final = nn.ConvTranspose2d(64 * 2, 3, kernel_size=4, stride=2, padding=1)
+			self.ups.append(ConvUp(scale * mult, int(scale * mult / 2)))
+		self.final = nn.ConvTranspose2d(scale * 2, 3, kernel_size=4, stride=2, padding=1)
 
 	def forward(self, x):
 		orig_img = x.clone()

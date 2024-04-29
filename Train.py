@@ -14,6 +14,7 @@ from torch.utils.tensorboard import SummaryWriter
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from torchsummary import summary
 
 #pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
@@ -217,10 +218,12 @@ if __name__ == '__main__':
 	D_scaler = torch.cuda.amp.GradScaler()
 
 	#setting up discriminators and generators
-	G_live = gen_with_attn().to(device)
+	G_live = gen_with_attn(scale=2, n_blocks=9).to(device)
 	D_live = discriminator().to(device)
-	G_pix = gen_with_attn().to(device)
+	G_pix = gen_with_attn(scale=2, n_blocks=9).to(device)
 	D_pix = discriminator().to(device)
+	print('-'*10+"Generator arch"+'-'*10)
+	print(summary(G_live, (3,256,256)))
 	
 	#setting up optimizers
 	G_optimizer = optim.Adam(list(G_live.parameters()) + list(G_pix.parameters()), lr=0.0002, betas=[0.5,0.999])
