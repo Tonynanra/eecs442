@@ -224,7 +224,7 @@ if __name__ == '__main__':
 		D_optimizer = optim.Adam(list(D_live.parameters()) + list(D_pix.parameters()), lr=0.0002, betas=[0.5,0.999])
 		start_epoch = 0
 	else:
-		attn_config, start_epoch, G_live, G_pix, D_live, D_pix, G_optimizer, D_optimizer, G_scaler, D_scaler = get_checkpoint(ckpt_path, device)
+		attn_config, start_epoch, G_live, G_pix, D_live, D_pix, G_optimizer, D_optimizer, G_scaler, D_scaler = get_checkpoint(ckpt_path)
 		G_live = G_live.to(device)
 		G_pix = G_pix.to(device)
 		D_live = D_live.to(device)
