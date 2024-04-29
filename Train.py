@@ -5,12 +5,13 @@ import torch.optim as optim
 from torchvision.utils import save_image
 from tqdm import tqdm
 from Discriminator_442 import discriminator
-from generator import generator, gen_with_attn, attn_config
+from generator import generator, gen_with_attn, attnConfig
 from dataset import PixelSceneryDataset
 import multiprocessing as mp
 import pickle
 from torch.utils.data import Subset
 from torch.utils.tensorboard import SummaryWriter
+from utils import get_checkpoint
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,7 +19,7 @@ from torchsummary import summary
 
 #pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
-def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimizer, D_optimizer, G_scaler, D_scaler, numEpochs=100, resume_from=None):
+def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimizer, D_optimizer, G_scaler, D_scaler, start_epoch=0, numEpochs=100):
 	'''
 	Using LSGAN loss for both discriminators and generators, 
 	and L1 loss for cycle and identity loss.
@@ -33,19 +34,6 @@ def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimiz
 	start_epoch = 0
 	checkpoint_interval = 25
 	os.makedirs('checkpoints', exist_ok=True)
-
-	if resume_from is not None:
-		checkpoint = torch.load(resume_from)
-		G_live.load_state_dict(checkpoint['G_live_state_dict'])
-		G_pix.load_state_dict(checkpoint['G_pix_state_dict'])
-		D_live.load_state_dict(checkpoint['D_live_state_dict'])
-		D_pix.load_state_dict(checkpoint['D_pix_state_dict'])
-		G_optimizer.load_state_dict(checkpoint['G_optimizer_state_dict'])
-		D_optimizer.load_state_dict(checkpoint['D_optimizer_state_dict'])
-		G_scaler.load_state_dict(checkpoint['G_scaler_state_dict'])
-		D_scaler.load_state_dict(checkpoint['D_scaler_state_dict'])
-		start_epoch = checkpoint['epoch']
-	
 
 	for epoch in range(start_epoch, numEpochs):
 		print('Start training epoch %d' % (epoch + 1))
@@ -119,7 +107,7 @@ def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimiz
 			G_scaler.scale(G_loss).backward()
 			G_scaler.step(G_optimizer)
 			G_scaler.update()
-
+			
 			if idx % (len(train_dataset) / BATCH_SIZE // 4) == 0:
 				save_folder = f"saved_images/{epoch}"
 				os.makedirs(save_folder, exist_ok=True)
@@ -143,6 +131,7 @@ def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimiz
 		save_image(fake_pixel * 0.5 + 0.5, os.path.join(save_folder, f"pixel_final.png"))
 		if epoch % checkpoint_interval == 0:
 			torch.save({
+					'attn_config': attn_config,
 					'epoch': epoch,
 					'G_live_state_dict': G_live.state_dict(),
 					'G_pix_state_dict': G_pix.state_dict(),
@@ -155,6 +144,7 @@ def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimiz
 			}, f'checkpoints/checkpoint_{epoch}.pth')
 	#end TRAINING EPOCHS
 	torch.save({
+		'attn_config': attn_config,
 		'epoch': epoch,
 		'G_live_state_dict': G_live.state_dict(),
 		'G_pix_state_dict': G_pix.state_dict(),
@@ -176,7 +166,10 @@ if __name__ == '__main__':
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 	Train_Dir_live="scenery/"
 	Train_Dir_pix="pixel/"
-
+	ckpt_path = None
+	if ckpt_path is None:
+		attn_config = attnConfig(attn_type='cross_attn')
+	
 	#setting up dataset
 	dataset = PixelSceneryDataset(
 			root_scenery=Train_Dir_live,
@@ -213,24 +206,30 @@ if __name__ == '__main__':
 	
 	val_loader = None
 
-	#setting up scalers to prevent minor changes from defaulting to 0
-	G_scaler = torch.cuda.amp.GradScaler()
-	D_scaler = torch.cuda.amp.GradScaler()
+	if ckpt_path is None:
+		#setting up scalers to prevent minor changes from defaulting to 0
+		G_scaler = torch.cuda.amp.GradScaler()
+		D_scaler = torch.cuda.amp.GradScaler()
 
-	#setting up discriminators and generators
-	G_live = gen_with_attn().to(device)
-	D_live = discriminator().to(device)
-	G_pix = gen_with_attn().to(device)
-	D_pix = discriminator().to(device)
-	
-	#setting up optimizers
-	G_optimizer = optim.Adam(list(G_live.parameters()) + list(G_pix.parameters()), lr=0.0002, betas=[0.5,0.999])
-	D_optimizer = optim.Adam(list(D_live.parameters()) + list(D_pix.parameters()), lr=0.0002, betas=[0.5,0.999])
+		
+
+		#setting up discriminators and generators
+		G_live = gen_with_attn(attn_config).to(device)
+		D_live = discriminator().to(device)
+		G_pix = gen_with_attn(attn_config).to(device)
+		D_pix = discriminator().to(device)
+		
+		#setting up optimizers
+		G_optimizer = optim.Adam(list(G_live.parameters()) + list(G_pix.parameters()), lr=0.0002, betas=[0.5,0.999])
+		D_optimizer = optim.Adam(list(D_live.parameters()) + list(D_pix.parameters()), lr=0.0002, betas=[0.5,0.999])
+		start_epoch = 0
+	else:
+		attn_config, start_epoch, G_live, G_pix, D_live, D_pix, G_optimizer, D_optimizer, G_scaler, D_scaler = get_checkpoint(ckpt_path)
 
 	os.makedirs('checkpoints', exist_ok=True)
 	with open('checkpoints/opt.txt', 'w', encoding='utf-8') as f:
 		f.write("num_epochs: 100\n")
-		f.write(str(attn_config()))
+		f.write(str(attn_config))
 		f.write('\n')
 		f.write('-'*10+"Generator arch"+'-'*10)
 		f.write('\n')
@@ -238,5 +237,5 @@ if __name__ == '__main__':
 	
 	#initiate training
 	print("begin training")
-	train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimizer, D_optimizer, G_scaler, D_scaler, numEpochs=NUM_EPOCHS, resume_from=None)
+	train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimizer, D_optimizer, G_scaler, D_scaler, start_epoch, numEpochs=NUM_EPOCHS)
 

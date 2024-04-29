@@ -4,28 +4,30 @@ import torch.nn.functional as F
 import numpy as np
 import attention_block
 
-class attn_config:
+class attnConfig:
 	'''
 	Hyperparameters to tune for attention layer
 	'''
-	#try 16, 32, 64. if fast enough training time & enough gpu memory, 64 is the best
-	embed_dim = 64 
+	def __init__(self, embed_dim=64, max_len=None, in_channels=None, attn_type='cross_attn', pe_type='learnedPE'):
+		# try 16, 32, 64. if fast enough training time & enough gpu memory, 64 is the best
+		self.embed_dim = embed_dim 
 
-	max_len = None # = spatial_dimention squared
+		self.max_len = max_len  # = spatial_dimention squared
 
-	in_channels = None #output channels of conv layer
+		self.in_channels = in_channels  # output channels of conv layer
 
-	attn_type = 'cross_attn' #choose from: 'cross_attn', 'self_attn', 'mamba', None
+		# choose from: 'cross_attn', 'self_attn', 'mamba', None
+		self.attn_type = attn_type 
 
-	# option 1: 'learnedPE' 
-	# option 2: 'NoPE' - no positional encoding
-	# option 3: 'RoPE' - rotary positional encoding, sota of nlp tasks (e.g. chatgpt)
-	# only matters to self and cross attn
-	pe_type = 'learnedPE'
+		# option 1: 'learnedPE' 
+		# option 2: 'NoPE' - no positional encoding
+		# option 3: 'RoPE' - rotary positional encoding, sota of nlp tasks (e.g. chatgpt)
+		# only matters to self and cross attn
+		self.pe_type = pe_type
 
 	def __str__(self):
-		attributes = [f"{key} = {getattr(attn_config, key)}" for key in dir(attn_config) 
-						if not key.startswith("__") and not callable(getattr(attn_config, key))]
+		attributes = [f"{key} = {getattr(self, key)}" for key in dir(self) 
+					  if not key.startswith("__") and not callable(getattr(self, key))]
 		return "\n".join(attributes)
 
 def normal_init(m, mean, std):
@@ -73,7 +75,7 @@ class identity_attn(nn.Module):
 		return x
 
 class ResidualAttentionBlock(nn.Module):
-	def __init__(self, channels: int, spatial_dim):
+	def __init__(self, attn_config: attnConfig, channels: int, spatial_dim):
 		super().__init__()
 		self.block = nn.Sequential(
 			ConvolutionalBlock(channels, channels, add_activation=True, kernel_size=3, padding=1),
@@ -91,7 +93,7 @@ class ResidualAttentionBlock(nn.Module):
 
 class gen_with_attn(nn.Module):
 	def __init__(
-		self, img_channels: int =3, num_features: int = 64, n_blocks: int = 6, n_downsamples: int = 2
+		self, attn_config: attnConfig, img_channels: int =3, num_features: int = 64, n_blocks: int = 6, n_downsamples: int = 2
 	):
 		"""
 		Generator consists of 2 layers of downsampling/encoding layer, 
@@ -127,7 +129,7 @@ class gen_with_attn(nn.Module):
 			) for i in range(n_downsamples)])
 
 		self.residual_attention = nn.ModuleList(
-			ResidualAttentionBlock(num_features * 4, 256 / (2 ** n_downsamples)) for _ in range(n_blocks))
+			ResidualAttentionBlock(attn_config, num_features * 4, 256 / (2 ** n_downsamples)) for _ in range(n_blocks))
 
 		self.upsampling_layers = nn.ModuleList([
 			ConvolutionalBlock(
