@@ -32,8 +32,7 @@ def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimiz
 	writer = SummaryWriter()
 	start_epoch = 0
 	checkpoint_interval = 25
-	if(not os.path.isdir('checkpoints')):
-		os.makedirs('checkpoints', exist_ok=True)
+	os.makedirs('checkpoints', exist_ok=True)
 
 	if resume_from is not None:
 		checkpoint = torch.load(resume_from)
@@ -228,8 +227,10 @@ if __name__ == '__main__':
 	G_optimizer = optim.Adam(list(G_live.parameters()) + list(G_pix.parameters()), lr=0.0002, betas=[0.5,0.999])
 	D_optimizer = optim.Adam(list(D_live.parameters()) + list(D_pix.parameters()), lr=0.0002, betas=[0.5,0.999])
 
-	with open('checkpoints/opt.txt', 'w') as f:
-		f.write(str(attn_config))
+	os.makedirs('checkpoints', exist_ok=True)
+	with open('checkpoints/opt.txt', 'w', encoding='utf-8') as f:
+		f.write("num_epochs: 100\n")
+		f.write(str(attn_config()))
 		f.write('\n')
 		f.write('-'*10+"Generator arch"+'-'*10)
 		f.write('\n')

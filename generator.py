@@ -23,6 +23,11 @@ class attn_config:
 	# only matters to self and cross attn
 	pe_type = 'learnedPE'
 
+	def __str__(self):
+		attributes = [f"{key} = {getattr(attn_config, key)}" for key in dir(attn_config) 
+						if not key.startswith("__") and not callable(getattr(attn_config, key))]
+		return "\n".join(attributes)
+
 def normal_init(m, mean, std):
 	"""
 	Helper function. Initialize model parameter with given mean and std.
