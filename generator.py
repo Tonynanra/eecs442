@@ -15,6 +15,8 @@ class attn_config:
 
 	in_channels = None #output channels of conv layer
 
+	attn_type = 'cross_attn' #choose from: 'cross_attn', 'self_attn', 'mamba', None
+
 	# option 1: 'learnedPE' 
 	# option 2: 'NoPE' - no positional encoding
 	# option 3: 'RoPE' - rotary positional encoding, sota of nlp tasks (e.g. chatgpt)
@@ -66,14 +68,14 @@ class identity_attn(nn.Module):
 		return x
 
 class ResidualAttentionBlock(nn.Module):
-	def __init__(self, channels: int, spatial_dim, attn_type):
+	def __init__(self, channels: int, spatial_dim):
 		super().__init__()
 		self.block = nn.Sequential(
 			ConvolutionalBlock(channels, channels, add_activation=True, kernel_size=3, padding=1),
 			ConvolutionalBlock(channels, channels, add_activation=False, kernel_size=3, padding=1),
 		)
-		self.attention = attention_block.BaseNet(attn_config.embed_dim, spatial_dim ** 2, attn_type, 
-												 channels, attn_config.pe_type) if attn_type is not None else identity_attn()
+		self.attention = attention_block.BaseNet(attn_config.embed_dim, spatial_dim ** 2, attn_config.attn_type, 
+												 channels, attn_config.pe_type) if attn_config.attn_type is not None else identity_attn()
 	def forward(self, x, orig_img):
 		x = F.relu(x + self.block(x), True)
 		x = self.attention(x, orig_img)
@@ -84,7 +86,7 @@ class ResidualAttentionBlock(nn.Module):
 
 class gen_with_attn(nn.Module):
 	def __init__(
-		self, img_channels: int =3, num_features: int = 64, n_blocks: int = 6, n_downsamples: int = 2, attn_type = None
+		self, img_channels: int =3, num_features: int = 64, n_blocks: int = 6, n_downsamples: int = 2
 	):
 		"""
 		Generator consists of 2 layers of downsampling/encoding layer, 
@@ -94,7 +96,6 @@ class gen_with_attn(nn.Module):
 		The network with 6 residual blocks can be written as: 
 		c7s1–64, d128, d256, R256, R256, R256, R256, R256, R256, u128, u64, and c7s1–3.
 
-		Attn_type: 'cross_attn', 'self_attn', 'mamba', None
 		"""
 		super().__init__()
 		self.initial_layer = nn.Sequential(
@@ -121,7 +122,7 @@ class gen_with_attn(nn.Module):
 			) for i in range(n_downsamples)])
 
 		self.residual_attention = nn.ModuleList(
-			ResidualAttentionBlock(num_features * 4, 256 / (2 ** n_downsamples), attn_type) for _ in range(n_blocks))
+			ResidualAttentionBlock(num_features * 4, 256 / (2 ** n_downsamples)) for _ in range(n_blocks))
 
 		self.upsampling_layers = nn.ModuleList([
 			ConvolutionalBlock(
