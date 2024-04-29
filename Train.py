@@ -5,7 +5,7 @@ import torch.optim as optim
 from torchvision.utils import save_image
 from tqdm import tqdm
 from Discriminator_442 import discriminator
-from generator import generator, gen_with_attn
+from generator import generator, gen_with_attn, attn_config
 from dataset import PixelSceneryDataset
 import multiprocessing as mp
 import pickle
@@ -31,7 +31,7 @@ def train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimiz
 	H_fakes = 0
 	writer = SummaryWriter()
 	start_epoch = 0
-	checkpoint_interval = numEpochs // 4
+	checkpoint_interval = 25
 	if(not os.path.isdir('checkpoints')):
 		os.makedirs('checkpoints', exist_ok=True)
 
@@ -173,6 +173,7 @@ if __name__ == '__main__':
 	LAMBDA_GEN = 1
 	LAMBDA_IDENTITY = 0.5
 	BATCH_SIZE = 1
+	NUM_EPOCHS = 100
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 	Train_Dir_live="scenery/"
 	Train_Dir_pix="pixel/"
@@ -184,11 +185,11 @@ if __name__ == '__main__':
 			
 	)
 
-	with open('train_subset.pkl', 'rb') as f:
-			train_indices = pickle.load(f)
+	# with open('train_subset.pkl', 'rb') as f:
+	# 		train_indices = pickle.load(f)
 
-	with open('val_subset.pkl', 'rb') as f:
-			val_indices = pickle.load(f)
+	# with open('val_subset.pkl', 'rb') as f:
+	# 		val_indices = pickle.load(f)
 
 	# train_dataset = Subset(dataset, train_indices)
 	# val_dataset = Subset(dataset, val_indices)
@@ -218,18 +219,23 @@ if __name__ == '__main__':
 	D_scaler = torch.cuda.amp.GradScaler()
 
 	#setting up discriminators and generators
-	G_live = gen_with_attn(scale=2, n_blocks=9).to(device)
+	G_live = gen_with_attn().to(device)
 	D_live = discriminator().to(device)
-	G_pix = gen_with_attn(scale=2, n_blocks=9).to(device)
+	G_pix = gen_with_attn().to(device)
 	D_pix = discriminator().to(device)
-	print('-'*10+"Generator arch"+'-'*10)
-	print(summary(G_live, (3,256,256)))
 	
 	#setting up optimizers
 	G_optimizer = optim.Adam(list(G_live.parameters()) + list(G_pix.parameters()), lr=0.0002, betas=[0.5,0.999])
 	D_optimizer = optim.Adam(list(D_live.parameters()) + list(D_pix.parameters()), lr=0.0002, betas=[0.5,0.999])
 
+	with open('checkpoints/opt.txt', 'w') as f:
+		f.write(str(attn_config))
+		f.write('\n')
+		f.write('-'*10+"Generator arch"+'-'*10)
+		f.write('\n')
+		f.write(str(summary(G_live, (3,256,256))))
+	
 	#initiate training
 	print("begin training")
-	train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimizer, D_optimizer, G_scaler, D_scaler)
+	train_func(G_live, G_pix, D_live, D_pix, train_loader, val_loader, G_optimizer, D_optimizer, G_scaler, D_scaler, numEpochs=NUM_EPOCHS, resume_from=None)
 

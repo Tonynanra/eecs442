@@ -13,11 +13,6 @@ class attn_config:
 
 	max_len = None # = spatial_dimention squared
 
-	# option 1: 'cross_attn'
-	# option 2: 'self_attn'
-	# option 3: 'mamba'
-	layer_type = 'cross_attn'
-
 	in_channels = None #output channels of conv layer
 
 	# option 1: 'learnedPE' 
@@ -37,99 +32,128 @@ def normal_init(m, mean, std):
 		# delete end
 
 
-
-class ConvDown(nn.Module):
-	def __init__(self, in_channels, out_channels, **kwargs):
-		super().__init__(**kwargs)
-		self.layers = nn.Sequential(
-			nn.Conv2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1),
-			nn.BatchNorm2d(out_channels),
-			nn.LeakyReLU(inplace=True)
-		)
-	def forward(self, x):
-		return self.layers(x)
-
-class ConvUp(nn.Module):
-	def __init__(self, in_channels, out_channels, **kwargs):
-		super().__init__(**kwargs)
-		self.layers = nn.Sequential(
-			nn.ConvTranspose2d(in_channels*2, out_channels, kernel_size=4, stride=2, padding=1),
-			nn.BatchNorm2d(out_channels),
-			nn.ReLU(inplace=True)
-		)
-	def forward(self, x, skip):
-		x = torch.cat([x, skip], dim=1)
-		return self.layers(x)
-
-class residualBlock(nn.Module):
-	def __init__(self, n_channels):
+class ConvolutionalBlock(nn.Module):
+	def __init__(
+		self,
+		in_channels: int,
+		out_channels: int,
+		is_downsampling: bool = True,
+		add_activation: bool = True,
+		**kwargs
+	):
 		super().__init__()
-		self.layers = nn.Sequential(
-			nn.Conv2d(n_channels, n_channels, kernel_size=3, padding=1),
-			nn.BatchNorm2d(n_channels),
-			nn.ReLU(True),
-			nn.Conv2d(n_channels, n_channels, kernel_size=3, padding=1),
-			nn.BatchNorm2d(n_channels)
-		)
-		self.final = nn.ReLU(True)
-	
+		if is_downsampling:
+			self.conv = nn.Sequential(
+				nn.Conv2d(in_channels, out_channels, padding_mode="reflect", **kwargs),
+				nn.InstanceNorm2d(out_channels),
+				nn.ReLU(inplace=True) if add_activation else nn.Identity(),
+			)
+		else:
+			self.conv = nn.Sequential(
+				nn.ConvTranspose2d(in_channels, out_channels, **kwargs),
+				nn.InstanceNorm2d(out_channels),
+				nn.ReLU(inplace=True) if add_activation else nn.Identity(),
+			)
+
 	def forward(self, x):
-		return self.final(x + self.layers(x))
+		return self.conv(x)
 
-class residualAttn(nn.Module):
-	def __init__(self, n_channels, spatial_dim):
+class identity_attn(nn.Module):
+	def __init__(self):
 		super().__init__()
-		self.residual = residualBlock(n_channels)
-		# self.attention = attention_block.BaseNet(attn_config.embed_dim, spatial_dim ** 2, attn_config.layer_type, 
-										        #  n_channels, attn_config.pe_type)
 
-	def forward(self, x, orig_img):
-		x = self.residual(x)
-		# x = self.attention(x, orig_img)
+	def forward(self, x, orig_img): 
 		return x
 
-class gen_with_attn(nn.Module):
-	def __init__(self, scale : int=1, img_dim : int=256, down_sample=2, n_blocks = 6, *args, **kwargs):
-		super().__init__(*args, **kwargs)
-		scale = 2 ** (5 + scale)
-		initial = nn.Sequential(
-				 nn.Conv2d(3, scale, kernel_size=4, stride=2, padding=1),
-				 nn.BatchNorm2d(scale),
-				 nn.LeakyReLU(True)
+class ResidualAttentionBlock(nn.Module):
+	def __init__(self, channels: int, spatial_dim, attn_type):
+		super().__init__()
+		self.block = nn.Sequential(
+			ConvolutionalBlock(channels, channels, add_activation=True, kernel_size=3, padding=1),
+			ConvolutionalBlock(channels, channels, add_activation=False, kernel_size=3, padding=1),
 		)
-		self.downs = nn.ModuleList([initial])
-		down_sample -= 1
-		for i in range(down_sample):  # add downsampling layers
-			mult = 2 ** i
-			self.downs.append(ConvDown(scale * mult, scale * mult * 2))
+		self.attention = attention_block.BaseNet(attn_config.embed_dim, spatial_dim ** 2, attn_type, 
+												 channels, attn_config.pe_type) if attn_type is not None else identity_attn()
+	def forward(self, x, orig_img):
+		x = F.relu(x + self.block(x), True)
+		x = self.attention(x, orig_img)
+		return x
 
-		self.resAttns = nn.ModuleList(residualAttn(scale * mult * 2, img_dim / (2**down_sample)) for _ in range(n_blocks))
+
+
+
+class gen_with_attn(nn.Module):
+	def __init__(
+		self, img_channels: int =3, num_features: int = 64, n_blocks: int = 6, n_downsamples: int = 2, attn_type = None
+	):
+		"""
+		Generator consists of 2 layers of downsampling/encoding layer, 
+		followed by 6 residual blocks for 128 × 128 training images 
+		and then 3 upsampling/decoding layer. 
 		
+		The network with 6 residual blocks can be written as: 
+		c7s1–64, d128, d256, R256, R256, R256, R256, R256, R256, u128, u64, and c7s1–3.
 
-		self.ups = nn.ModuleList()
-		for i in range(down_sample):  # add upsampling layers
-			mult = 2 ** (down_sample - i)
-			self.ups.append(ConvUp(scale * mult, int(scale * mult / 2)))
-		self.final = nn.ConvTranspose2d(scale * 2, 3, kernel_size=4, stride=2, padding=1)
+		Attn_type: 'cross_attn', 'self_attn', 'mamba', None
+		"""
+		super().__init__()
+		self.initial_layer = nn.Sequential(
+			nn.Conv2d(
+				img_channels,
+				num_features,
+				kernel_size=7,
+				stride=1,
+				padding=3,
+				padding_mode="reflect",
+			),
+			nn.InstanceNorm2d(num_features),
+			nn.ReLU(inplace=True),
+		)
 
+		self.downsampling_layers = nn.ModuleList([
+			ConvolutionalBlock(
+				num_features * 2**i, 
+				num_features * 2**(i+1),
+				is_downsampling=True, 
+				kernel_size=3, 
+				stride=2, 
+				padding=1,
+			) for i in range(n_downsamples)])
+
+		self.residual_attention = nn.ModuleList(
+			ResidualAttentionBlock(num_features * 4, 256 / (2 ** n_downsamples), attn_type) for _ in range(n_blocks))
+
+		self.upsampling_layers = nn.ModuleList([
+			ConvolutionalBlock(
+				num_features * 2**(i+1), 
+				num_features * 2**i,
+				is_downsampling=False, 
+				kernel_size=3, 
+				stride=2, 
+				padding=1,
+				output_padding=1,
+			)
+			for i in reversed(range(n_downsamples))])
+
+		self.last_layer = nn.Conv2d(
+			num_features * 1,
+			img_channels,
+			kernel_size=7,
+			stride=1,
+			padding=3,
+			padding_mode="reflect",
+		)
+	
 	def forward(self, x):
 		orig_img = x.clone()
-		skips = []
-
-		for down in self.downs:
-			x = down(x)
-			skips.append(x.clone())
-		
-		for resAttn in self.resAttns:
-			x = resAttn(x, orig_img)
-
-		for up, skip in zip(self.ups, skips[::-1]):
-			x = up(x, skip)
-		x = torch.cat([x, skips[0]], dim=1)
-		return self.final(x)
-		
-
-		
+		x = self.initial_layer(x)
+		for layer in self.downsampling_layers:
+			x = layer(x)
+		for layer in self.residual_attention:
+			x = layer(x, orig_img)
+		for layer in self.upsampling_layers:
+			x = layer(x)
+		return torch.tanh(self.last_layer(x))
 
 class generator(nn.Module):
   # initializers
