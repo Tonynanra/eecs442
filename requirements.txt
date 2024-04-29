@@ -3,5 +3,4 @@ matplotlib
 tqdm
 tensorboard
 rotary-embedding-torch
-pscan
 torch-summary
