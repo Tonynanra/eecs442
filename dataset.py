@@ -17,6 +17,8 @@ class PixelSceneryDataset(Dataset):
 
         self.pixel_images = os.listdir(root_pixel)
         self.scenery_images = os.listdir(root_scenery)
+        shuffle(self.pixel_images)
+        shuffle(self.scenery_images)
         self.length_dataset = min(len(self.pixel_images), len(self.scenery_images)) # in case of datasets not having the same length
         self.pixel_len = len(self.pixel_images)
         self.scenery_len = len(self.scenery_images)
