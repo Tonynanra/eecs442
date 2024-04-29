@@ -61,7 +61,7 @@ class BaseNet(nn.Module):
                 self.rotary_emb = RotaryEmbedding(dim=embed_dim)
             else:
                 assert self.pe_type == 'NoPE'
-        else: self.pe_type = 'NoPE' #TODO: check whether mamba need pos-encoding
+        else: self.pe_type = 'NoPE'
         self.layer = None
 
         if layer_type == 'cross_attn' or layer_type == 'self_attn':
