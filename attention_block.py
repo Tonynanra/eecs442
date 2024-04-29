@@ -7,7 +7,7 @@ import numpy as np
 import random
 from rotary_embedding_torch import RotaryEmbedding
 from torchvision.transforms import Resize
-from mamba import Mamba, MambaConfig
+from mamba.mamba import Mamba, MambaConfig
 
 class Block(nn.Module):
     def __init__(self, embed_dim, max_len, attn_type):
